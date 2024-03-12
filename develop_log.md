@@ -29,3 +29,8 @@ data source: database like mongoDB or SQL(scrapy download from internet and stor
              (rare possible) if there is such connector in the future and network conditional is good enough, use LLM connector to download from internet directly. no need to pre store any data.
 
 PS: at this moment, LLama_index is the main process for "RAG" part since it's more friendly for a rookie like me, later may swithc to langchain, just a note here
+
+### 03/12
+
+today roughly went through all the codes of history_rag, but still some query engine build logic are not very clear, will leave it in the future verification part to double research.
+tomorrow will try to extract the useful code and make it adapt to Azure OpenAI.
