@@ -1,0 +1,16 @@
+llama-index
+pymilvus
+easydict
+dashscope
+
+torch
+transformers
+pyyaml
+google-generativeai
+gradio
+
+
+llama-index-vector-stores-milvus
+sentence-transformers
+llama-index-embeddings-azure-openai
+  

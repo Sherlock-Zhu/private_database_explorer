@@ -1,0 +1,21 @@
+llm:
+    name: "gpt-4-0125-preview"
+    temperature: 0.01
+embedding:
+    name: "BAAI/bge-base-en-v1.5"
+    dim: 1536 
+rerank:
+    name: "BAAI/bge-reranker-large"
+milvus:
+    host: "localhost" 
+    port: "19530"
+    collection_name: "llm_test"
+    retrieve_topk: 100
+    window_size: 4
+    rerank_topk: 15
+azure:
+    azure_endpoint: "https://secondapi.openai.azure.com/"
+    api_version: "2024-02-15-preview"
+    
+
+

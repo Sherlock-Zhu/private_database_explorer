@@ -34,3 +34,28 @@ PS: at this moment, LLama_index is the main process for "RAG" part since it's mo
 
 today roughly went through all the codes of history_rag, but still some query engine build logic are not very clear, will leave it in the future verification part to double research.
 tomorrow will try to extract the useful code and make it adapt to Azure OpenAI.
+
+### 03/13
+
+too many changes between llamaindex 0.9 and 0.10, it's very unfriendly since i need to restruct a lot of codes....but cannot find official document for 0.9, what a pity!
+besides, azure openAI also is difficult to be used. hope i have gpt4 tokens for test...
+
+work is harder then expected, just have basic understand how to play with azure openAI with llamaindex today. need more effort tomorrow.
+
+### 03/14
+
+hmmmm, it seems his rag for azure openAI can work now, but memory exhausted, need to configure a better sever tomorrow...
+
+### 03/15
+
+after switch a server, it currently works well.
+now need to migrate from his_rag to wiki_rag
+
+### 03/16
+
+works for llama index part done, it can work as expected now, need further check about the overall design
+
+### 03/17
+
+remove unnecessary doc and content from hisrag.
+make a draft design at this moment, start clawler part's work

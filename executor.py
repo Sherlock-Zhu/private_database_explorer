@@ -9,94 +9,45 @@ import requests
 from pathlib import Path
 from urllib.parse import urlparse
 
-from llama_index import ServiceContext, StorageContext
-from llama_index import set_global_service_context
-from llama_index import VectorStoreIndex, SimpleDirectoryReader, Document
-from llama_index.llms import OpenAI
-from llama_index.readers.file.flat_reader import FlatReader
-from llama_index.vector_stores import MilvusVectorStore
-from llama_index.embeddings import HuggingFaceEmbedding
-from llama_index.node_parser.text import SentenceWindowNodeParser
+from llama_index.core import StorageContext
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+from llama_index.readers.file import FlatReader
+from llama_index.vector_stores.milvus import MilvusVectorStore
+from llama_index.embeddings.azure_openai import AzureOpenAIEmbedding
 
-from llama_index.prompts import ChatPromptTemplate, ChatMessage, MessageRole, PromptTemplate
-from llama_index.postprocessor import MetadataReplacementPostProcessor
-from llama_index.postprocessor import SentenceTransformerRerank
-#from llama_index.indices import ZillizCloudPipelineIndex
-from custom.zilliz.base import ZillizCloudPipelineIndex
-from llama_index.indices.query.schema import QueryBundle
-from llama_index.schema import BaseNode, ImageNode, MetadataMode
+from llama_index.core.prompts import ChatMessage, MessageRole, ChatPromptTemplate
+from llama_index.core.postprocessor import SentenceTransformerRerank, MetadataReplacementPostProcessor
+from llama_index.core.indices.query.schema import QueryBundle
+from llama_index.core.schema import BaseNode, ImageNode, MetadataMode
 
-from custom.history_sentence_window import HistorySentenceWindowNodeParser
-from custom.llms.QwenLLM import QwenUnofficial
-from custom.llms.GeminiLLM import Gemini
-from custom.llms.proxy_model import ProxyModel
-from pymilvus import MilvusClient
+from custom.my_sentence_window import MySentenceWindowNodeParser
+
+from llama_index.llms.azure_openai import AzureOpenAI
+from llama_index.core import Settings
+
 
 QA_PROMPT_TMPL_STR = (
-    "请你仔细阅读相关内容，结合历史资料进行回答,每一条史资料使用'出处：《书名》原文内容'的形式标注 (如果回答请清晰无误地引用原文,先给出回答，再贴上对应的原文，使用《书名》[]对原文进行标识),，如果发现资料无法得到答案，就回答不知道 \n"
-    "搜索的相关历史资料如下所示.\n"
-    "---------------------\n"
+    "Please read the provided content carefully and then give the anwser based on the provided content. The content is given in format 'url: url_address content'. If the given content containers the answer, please give the answer firstly, and then paste the url_address to record the answer source. If the provided content doesn't contains the answer of the question, please reply i don't know. Answer format as below:"
+    "--------------------------\n"
     "{context_str}\n"
     "---------------------\n"
-    "问题: {query_str}\n"
-    "答案: "
+    "Question: {query_str}\n"
+    "Answer: "
+
 )
 
-QA_SYSTEM_PROMPT = "你是一个严谨的历史知识问答智能体，你会仔细阅读历史材料并给出准确的回答,你的回答都会非常准确，因为你在回答的之后，使用在《书名》[]内给出原文用来支撑你回答的证据.并且你会在开头说明原文是否有回答所需的知识"
+QA_SYSTEM_PROMPT = "You are a precise engineer. you will read the provided content carefully and then give the precise answer. you will also give the url_address of the answer to prove your answer is correct. You will explain if the provided content contains answer of the question"
 
 REFINE_PROMPT_TMPL_STR = ( 
-    "你是一个历史知识回答修正机器人，你严格按以下方式工作"
-    "1.只有原答案为不知道时才进行修正,否则输出原答案的内容\n"
-    "2.修正的时候为了体现你的精准和客观，你非常喜欢使用《书名》[]将原文展示出来.\n"
-    "3.如果感到疑惑的时候，就用原答案的内容回答。"
-    "新的知识: {context_msg}\n"
-    "问题: {query_str}\n"
-    "原答案: {existing_answer}\n"
-    "新答案: "
+    "you are an answer correction engineer, and you will strictly adhere to the following methods of work"
+    "1. only when the original answer is i don't know, then you will overwrite the old answer, otherwise you will append your answer to the original answer"
+    "2. when you do the correction, you like to give the url_address to give the source of the answer"
+    "3. if you are confused with new knowledge, use the original answer as your answer"
+    "new knowledge: {context_msg}\n"
+    "question: {query_str}\n"
+    "original answer: {existing_answer}\n"
+    "new answer: "
 )
-
-def is_valid_url(url):
-    try:
-        result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except ValueError:
-        return False
-
-def is_github_folder_url(url):
-    return url.startswith('https://raw.githubusercontent.com/') and '.' not in os.path.basename(url)
-
-
-def get_branch_head_sha(owner, repo, branch):
-    url = f"https://api.github.com/repos/{owner}/{repo}/git/ref/heads/{branch}"
-    response = requests.get(url)
-    data = response.json()
-    sha = data['object']['sha']
-    return sha
-
-def get_github_repo_contents(repo_url):
-    # repo_url example: https://raw.githubusercontent.com/wxywb/history_rag/master/data/history_24/
-    repo_owner = repo_url.split('/')[3]
-    repo_name = repo_url.split('/')[4]
-    branch = repo_url.split('/')[5]
-    folder_path = '/'.join(repo_url.split('/')[6:])
-    sha = get_branch_head_sha(repo_owner, repo_name, branch)
-    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/git/trees/{sha}?recursive=1"
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
-
-            raw_urls = []
-            for file in data['tree']:
-                if file['path'].startswith(folder_path) and file['path'].endswith('.txt'):
-                    raw_url = f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/{branch}/{file['path']}"
-                    raw_urls.append(raw_url)
-            return raw_urls
-        else:
-            print(f"Failed to fetch contents. Status code: {response.status_code}")
-    except Exception as e:
-        print(f"Failed to fetch contents. Error: {str(e)}")
-    return []
 
 class Executor:
     def __init__(self, model):
@@ -120,31 +71,31 @@ class MilvusExecutor(Executor):
         self.index = None
         self.query_engine = None
         self.config = config
-        self.node_parser = HistorySentenceWindowNodeParser.from_defaults(
-            sentence_splitter=lambda text: re.findall("[^,.;。？！]+[,.;。？！]?", text),
+        self.api_key = os.getenv("AzureAIKey")
+        self.node_parser = MySentenceWindowNodeParser.from_defaults(
+            sentence_splitter=lambda text: re.findall("[^，；。？！,;.?!]+[^，；。？！,;.?!]?", text),
             window_size=config.milvus.window_size,
             window_metadata_key="window",
             original_text_metadata_key="original_text",)
 
-        embed_model = HuggingFaceEmbedding(model_name=config.embedding.name)
+        embed_model = AzureOpenAIEmbedding(
+            model="text-embedding-ada-002",
+            deployment_name="embedding-test",
+            api_key=self.api_key,
+            azure_endpoint=self.config.azure.azure_endpoint,
+            api_version=self.config.azure.api_version,
+        )
+        llm = AzureOpenAI(
+            engine="test-gpt-4",
+            model="gpt-4-32k",
+            temperature=0.0,
+            api_key=self.api_key,
+            azure_endpoint=self.config.azure.azure_endpoint,
+            api_version=self.config.azure.api_version,
+         )
 
-        # 使用Qwen 通义千问模型
-        if config.llm.name.find("qwen") != -1:
-            llm = QwenUnofficial(temperature=config.llm.temperature, model=config.llm.name, max_tokens=2048)
-        elif config.llm.name.find("gemini") != -1:
-            llm = Gemini(temperature=config.llm.temperature, model_name=config.llm.name, max_tokens=2048)
-        elif 'proxy_model' in config.llm:
-            llm = ProxyModel(model_name=config.llm.name, api_base=config.llm.api_base, api_key=config.llm.api_key,
-                             temperature=config.llm.temperature,  max_tokens=2048)
-            print(f"使用{config.llm.name},PROXY_SERVER_URL为{config.llm.api_base},PROXY_API_KEY为{config.llm.api_key}")
-        else:
-            api_base = None
-            if 'api_base' in config.llm:
-                api_base = config.llm.api_base
-            llm = OpenAI(api_base = api_base, temperature=config.llm.temperature, model=config.llm.name, max_tokens=2048)
-
-        service_context = ServiceContext.from_defaults(llm=llm, embed_model=embed_model)
-        set_global_service_context(service_context)
+        Settings.llm = llm
+        Settings.embed_model = embed_model
         rerank_k = config.milvus.rerank_topk
         self.rerank_postprocessor = SentenceTransformerRerank(
             model=config.rerank.name, top_n=rerank_k)
@@ -159,9 +110,9 @@ class MilvusExecutor(Executor):
         vector_store = MilvusVectorStore(
             uri = f"http://{config.milvus.host}:{config.milvus.port}",
             collection_name = config.milvus.collection_name,
-            overwrite=overwrite,
-            dim=config.embedding.dim)
-        self._milvus_client = vector_store.milvusclient
+            dim=config.embedding.dim,
+            overwrite=overwrite)
+        self._milvus_client = vector_store._milvusclient
          
         if path.endswith('.txt'):
             if os.path.exists(path) is False:
@@ -192,7 +143,7 @@ class MilvusExecutor(Executor):
             collection_name = config.milvus.collection_name,
             dim=config.embedding.dim)
         self.index = VectorStoreIndex.from_vector_store(vector_store=vector_store)
-        self._milvus_client = vector_store.milvusclient
+        self._milvus_client = vector_store._milvusclient
 
     def build_query_engine(self):
         config = self.config
@@ -221,9 +172,9 @@ class MilvusExecutor(Executor):
         config = self.config
         if self._milvus_client is None:
             self._get_index()
-        num_entities_prev = self._milvus_client.query(collection_name='history_rag',filter="",output_fields=["count(*)"])[0]["count(*)"]
+        num_entities_prev = self._milvus_client.query(collection_name=config.milvus.collection_name,filter="",output_fields=["count(*)"])[0]["count(*)"]
         res = self._milvus_client.delete(collection_name=config.milvus.collection_name, filter=f"file_name=='{path}'")
-        num_entities = self._milvus_client.query(collection_name='history_rag',filter="",output_fields=["count(*)"])[0]["count(*)"]
+        num_entities = self._milvus_client.query(collection_name=config.milvus.collection_name,filter="",output_fields=["count(*)"])[0]["count(*)"]
         print(f'(rag) 现有{num_entities}条，删除{num_entities_prev - num_entities}条数据')
     
     def query(self, question):

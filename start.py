@@ -23,13 +23,12 @@ class CommandLine():
         self.show_start_info()
         conf = read_yaml_config(self.config_path)
         self._executor = MilvusExecutor(conf) 
-        print('(rag) milvus模式已选择')
-        print('  1.使用`build data/history_24/baihuasanguozhi.txt`来进行知识库构建。')
-        print('  2.已有索引可以使用`ask`进行提问, `-d`参数以debug模式进入。')
-        print('  3.删除已有索引可以使用`remove baihuasanguozhi.txt`。')
+        print('  1.use command `build data/history_24/baihuasanguozhi.txt` to build the knowledge database')
+        print('  2.use command `ask` to start ask question, use `-d` for debug mode')
+        print('  3.to delete knowledge, please use `remove baihuasanguozhi.txt`。')
         self._mode = 'milvus'
         while True:
-            command_text = input("(rag) ")
+            command_text = input("(llm mode select)  ")
             self.parse_input(command_text)
 
     def parse_input(self, text):
@@ -40,7 +39,7 @@ class CommandLine():
                     print(commands)
                     self.build_index(path=commands[2], overwrite=True)
                 else:
-                    print('(rag) build仅支持 `-overwrite`参数')
+                    print('(llm mode select)  build only supports parameter `-overwrite`')
             elif len(commands) == 2:
                 self.build_index(path=commands[1], overwrite=False)
         elif commands[0] == 'ask':
@@ -48,19 +47,19 @@ class CommandLine():
                 if commands[1] == '-d':
                     self._executor.set_debug(True)
                 else: 
-                    print('(rag) ask仅支持 `-d`参数 ')
+                    print('(llm mode select)  ask only supports parameter `-d`')
             else:
                 self._executor.set_debug(False)
             self.question_answer()
         elif commands[0] == 'remove':
             if len(commands) != 2:
-                print('(rag) remove只接受1个参数。')
+                print('(llm mode select) remove only accept one parameter')
             self._executor.delete_file(commands[1])
             
         elif 'quit' in commands[0]:
             self._exit()
         else: 
-            print('(rag) 只有[build|ask|remove|quit]中的操作, 请重新尝试。')
+            print('(llm mode select) currently only support command [build|ask|remove|quit], please try again')
             
     def query(self, question):
         ans = self._executor.query(question)
@@ -70,7 +69,7 @@ class CommandLine():
 
     def build_index(self, path, overwrite):
         self._executor.build_index(path, overwrite)
-        print('(rag) 索引构建完成')
+        print('(llm mode select) index build completed')
 
     def remove(self, filename):
         self._executor.delete_file(filename)
@@ -78,9 +77,9 @@ class CommandLine():
     def question_answer(self):
         self._executor.build_query_engine()
         while True: 
-            question = input("(rag) 问题: ")
+            question = input("(llm) question: ")
             if question == 'quit':
-                print('(rag) 退出问答')
+                print('(llm) quit from aks mode')
                 break
             elif question == "":
                 continue
@@ -93,9 +92,9 @@ class CommandLine():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--cfg', type=str, help='Path to the configuration file', default='cfgs/config.yaml')
+    parser.add_argument('-c', '--config', type=str, help='Path to the configuration file', default='cfgs/config.yaml')
     args = parser.parse_args()
 
-    cli = CommandLine(args.cfg)
+    cli = CommandLine(args.config)
     cli.run()
 
