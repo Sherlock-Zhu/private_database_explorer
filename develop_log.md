@@ -59,3 +59,20 @@ works for llama index part done, it can work as expected now, need further check
 
 remove unnecessary doc and content from hisrag.
 make a draft design at this moment, start clawler part's work
+
+### 03/19
+
+met an issue that when use milvus, it reported "code=1100, message=the length (76464) of dynamic field exceeds max length (65536): expected=valid length dynamic field, actual=length exceeds max length: invalid parameter"
+guess it's because the node is too long, trying to find a better way to split the sentence.
+
+### 03/20
+
+re-learning regular expression...
+
+### 03/22
+
+job done, but seems not as good as i expected, will further check llamaindex usage.
+
+### 03/24
+
+Stopped here for a while, will back next week

@@ -13,7 +13,7 @@ from llama_index.core.node_parser.text.utils import split_by_sentence_tokenizer
 from llama_index.core.schema import BaseNode, Document
 from llama_index.core.utils import get_tqdm_iterable
 
-import base64
+import json
 
 DEFAULT_WINDOW_SIZE = 3
 DEFAULT_WINDOW_METADATA_KEY = "window"
@@ -104,6 +104,17 @@ class MySentenceWindowNodeParser(NodeParser):
         self, documents: Sequence[Document]
     ) -> List[BaseNode]:
         """Build window nodes from documents."""
+        
+        # add doc url based on doc name, need further modify here to adapt to different knowledge base
+        # just give a general step since only wiki base is created at this moment 
+        doc_mapping_path = "/root/wo/code/python/private_database_explorer_db/datasource/file_record.json"
+        with open(doc_mapping_path, 'r') as file:
+            json_data = file.read()
+        url_dict = json.loads(json_data)
+        base_url = "https://supportability.visualstudio.com/15ab72f0-1239-430d-95c3-59b5f706c68d/_apis/wiki/wikis/"
+
+        # url part done
+
         all_nodes: List[BaseNode] = []
         for doc in documents:
             text = doc.text
@@ -113,9 +124,8 @@ class MySentenceWindowNodeParser(NodeParser):
                 doc,
                 id_func=self.id_func,
             )
-            # add doc url based on doc name 
-            url = base64.urlsafe_b64decode(doc.metadata['file_name'].encode('utf-8')).decode('utf-8')
-
+            api_url = base_url + url_dict[doc.metadata['file_name']]
+            url = api_url.replace("/_apis/wiki/","/_wiki/").replace("/pages/","?pagePath=")
             # add window to each node
             for i, node in enumerate(nodes):
                 window_nodes = nodes[

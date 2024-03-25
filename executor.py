@@ -73,7 +73,8 @@ class MilvusExecutor(Executor):
         self.config = config
         self.api_key = os.getenv("AzureAIKey")
         self.node_parser = MySentenceWindowNodeParser.from_defaults(
-            sentence_splitter=lambda text: re.findall("[^，；。？！,;.?!]+[^，；。？！,;.?!]?", text),
+            # it should be better to use re.split other than re.findall, but current expression should can work, so that no modify on it
+            sentence_splitter=lambda text: re.findall('[^，；。？！,;\.\?!$\n]+?(?:[，；。？！,;\.\?!$\n]|%2C)', re.sub('[ \t]{2,}', " ", text)),
             window_size=config.milvus.window_size,
             window_metadata_key="window",
             original_text_metadata_key="original_text",)
